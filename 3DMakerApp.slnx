@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="3dmakerapp.client/3dmakerapp.client.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="3DMakerApp.Server/3DMakerApp.Server.csproj" />
+</Solution>

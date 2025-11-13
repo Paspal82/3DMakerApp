@@ -1,0 +1,12 @@
+<main>
+  <h1>Benvenuto in 3DMakerApp</h1>
+  <p>Questa è la pagina di benvenuto del client.</p>
+</main>
+
+<div *ngIf="welcomeHtml; else loading">
+  <div [innerHTML]="welcomeHtml"></div>
+</div>
+
+<ng-template #loading>
+  <p>Loading welcome page... If the backend is not started, please start the ASP.NET server.</p>
+</ng-template>

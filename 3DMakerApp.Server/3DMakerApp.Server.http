@@ -1,0 +1,6 @@
+@_3DMakerApp.Server_HostAddress = http://localhost:5286
+
+GET {{_3DMakerApp.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
