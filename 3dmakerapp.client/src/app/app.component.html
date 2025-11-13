@@ -1,12 +1,46 @@
 <main>
-  <h1>Benvenuto in 3DMakerApp</h1>
-  <p>Questa è la pagina di benvenuto del client.</p>
+  <h1>Prodotti</h1>
+
+  <section>
+    <h2>Nuovo prodotto</h2>
+    <form (ngSubmit)="createProduct()">
+      <div>
+        <label>Nome</label>
+        <input [(ngModel)]="newProduct.name" name="name" required />
+      </div>
+      <div>
+        <label>Descrizione</label>
+        <input [(ngModel)]="newProduct.description" name="description" />
+      </div>
+      <div>
+        <label>Prezzo</label>
+        <input type="number" [(ngModel)]="newProduct.price" name="price" />
+      </div>
+      <button type="submit">Crea</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Elenco prodotti</h2>
+    <table *ngIf="products && products.length; else empty">
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Descrizione</th>
+          <th>Prezzo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let p of products">
+          <td>{{ p.name }}</td>
+          <td>{{ p.description }}</td>
+          <td>{{ p.price | number: '1.2-2' }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <ng-template #empty>
+      <p>Nessun prodotto disponibile.</p>
+    </ng-template>
+  </section>
 </main>
-
-<div *ngIf="welcomeHtml; else loading">
-  <div [innerHTML]="welcomeHtml"></div>
-</div>
-
-<ng-template #loading>
-  <p>Loading welcome page... If the backend is not started, please start the ASP.NET server.</p>
-</ng-template>
