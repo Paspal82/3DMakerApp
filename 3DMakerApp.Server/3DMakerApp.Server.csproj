@@ -16,6 +16,7 @@
       <Version>10.*-*</Version>
     </PackageReference>
     <PackageReference Include="MongoDB.Driver" Version="2.19.2" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.5" />
   </ItemGroup>
 
   <ItemGroup>

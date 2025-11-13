@@ -1,4 +1,6 @@
 using MongoDB.Driver;
+using MongoDB.Bson;
+using System.Text.RegularExpressions;
 using _3DMakerApp.Server.Models;
 
 namespace _3DMakerApp.Server.Services
@@ -39,6 +41,46 @@ namespace _3DMakerApp.Server.Services
         public async Task RemoveAsync(string id)
         {
             await _products.DeleteOneAsync(p => p.Id == id);
+        }
+
+        // New: paged query with optional filter/search
+        public async Task<(List<Product> Items, long Total)> QueryAsync(string? search, string? nameFilter, int page, int pageSize)
+        {
+            var filterBuilder = Builders<Product>.Filter;
+            var filter = filterBuilder.Empty;
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var escaped = Regex.Escape(search);
+                var pattern = $"(?i).*{escaped}.*"; // case-insensitive contains
+                var searchFilter = filterBuilder.Or(
+                    filterBuilder.Regex("Name", pattern),
+                    filterBuilder.Regex("Description", pattern)
+                );
+                filter = filter & searchFilter;
+            }
+
+            if (!string.IsNullOrWhiteSpace(nameFilter))
+            {
+                filter &= filterBuilder.Eq("Name", nameFilter);
+            }
+
+            var total = await _products.CountDocumentsAsync(filter);
+
+            var items = await _products.Find(filter)
+                .Sort(Builders<Product>.Sort.Descending("Name"))
+                .Skip((page - 1) * pageSize)
+                .Limit(pageSize)
+                .ToListAsync();
+
+            return (items, total);
+        }
+
+        // Return distinct product names
+        public async Task<List<string>> GetDistinctNamesAsync()
+        {
+            var names = await _products.Find(_ => true).Project(p => p.Name).ToListAsync();
+            return names.Distinct().OrderBy(n => n).ToList();
         }
     }
 }

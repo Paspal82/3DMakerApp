@@ -1,46 +1,148 @@
 <main>
+  <button class="theme-toggle btn-accent" (click)="toggleTheme()">Toggle theme</button>
+  <button class="theme-toggle cart-icon" (click)="openCart()" aria-label="Apri carrello">
+    <!-- shopping bag minimal icon -->
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M3 6h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M16 10a4 4 0 0 1-8 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="cart-count">{{ cartCount }}</span>
+  </button>
+
   <h1>Prodotti</h1>
 
-  <section>
+  <!-- success popup centered -->
+  <div *ngIf="lastSuccess" class="success-popup" role="status" aria-live="polite">
+    <div class="success-content">{{ lastSuccess }}</div>
+  </div>
+
+  <section class="controls">
+    <input type="text" placeholder="Cerca..." [(ngModel)]="search" (keyup.enter)="onSearch()" />
+
+    <select [(ngModel)]="nameFilter" (change)="onFilterChange()">
+      <option value="">Tutti i nomi</option>
+      <option *ngFor="let n of names" [value]="n">{{ n }}</option>
+    </select>
+
+    <button (click)="onSearch()">Cerca</button>
+    <button (click)="resetFilters">Reset filtri</button>
+  </section>
+
+  <section class="create">
     <h2>Nuovo prodotto</h2>
-    <form (ngSubmit)="createProduct()">
-      <div>
-        <label>Nome</label>
-        <input [(ngModel)]="newProduct.name" name="name" required />
+    <div class="create-form">
+      <input placeholder="Nome" [(ngModel)]="newName" />
+      <input placeholder="Descrizione" [(ngModel)]="newDescription" />
+      <input type="text" placeholder="Prezzo (es. 8,5 o 8.5)" [(ngModel)]="newPrice" (input)="onPriceInput()" />
+      <input type="file" (change)="onFileSelected($event)" accept="image/png, image/jpeg" />
+      <div *ngIf="selectedPreviewUrl" class="preview">
+        <img [src]="selectedPreviewUrl" alt="preview" />
       </div>
-      <div>
-        <label>Descrizione</label>
-        <input [(ngModel)]="newProduct.description" name="description" />
-      </div>
-      <div>
-        <label>Prezzo</label>
-        <input type="number" [(ngModel)]="newProduct.price" name="price" />
-      </div>
-      <button type="submit">Crea</button>
-    </form>
+      <div *ngIf="selectedFileError" class="file-error">{{ selectedFileError }}</div>
+      <button (click)="createProduct()" [disabled]="!!selectedFileError">Crea prodotto</button>
+    </div>
   </section>
 
-  <section>
-    <h2>Elenco prodotti</h2>
-    <table *ngIf="products && products.length; else empty">
-      <thead>
-        <tr>
-          <th>Nome</th>
-          <th>Descrizione</th>
-          <th>Prezzo</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let p of products">
-          <td>{{ p.name }}</td>
-          <td>{{ p.description }}</td>
-          <td>{{ p.price | number: '1.2-2' }}</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <ng-template #empty>
-      <p>Nessun prodotto disponibile.</p>
-    </ng-template>
+  <section *ngIf="lastError; else productList">
+    <p>{{ lastError }}</p>
   </section>
+
+  <ng-template #productList>
+    <div class="cards">
+      <div class="card" *ngFor="let p of products">
+        <div class="thumb" *ngIf="getCardSrc(p) && !isImageFailed(p); else placeholder">
+          <img (error)="onImageError(p)" [src]="getCardSrc(p)" alt="{{p.name}}" />
+        </div>
+        <ng-template #placeholder>
+          <div class="thumb placeholder">
+            <!-- classic camera with slash 'image not found' icon -->
+            <svg viewBox="0 0 24 24" width="96" height="96" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21 6h-3.2l-1.6-2.4A1 1 0 0 0 15.6 3H8.4a1 1 0 0 0-.6.2L6.2 5H3a1 1 0 0 0-1 1v11.8c0 .6.4 1 .9 1H20a1 1 0 0 0 1-.9V7a1 1 0 0 0-1-1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 3l18 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </ng-template>
+        
+        <div class="card-body">
+          <h3 class="card-title">{{ p.name }}</h3>
+          <p class="desc truncated">{{ p.description }}</p>
+          
+          <div class="card-footer">
+            <p class="price">{{ p.price | currency:'EUR':'symbol':'1.2-2' }}</p>
+            
+            <button class="icon-btn cart-btn" (click)="addToCart(p)" aria-label="Aggiungi al carrello" title="Aggiungi al carrello">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 6h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M16 10a4 4 0 0 1-8 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+
+            <button class="icon-btn goto-btn" (click)="openDetail(p)" aria-label="Dettaglio" title="Dettaglio">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pagination" *ngIf="pageCount > 1">
+      <button (click)="goToPage(page-1)" [disabled]="page===1">Prev</button>
+      <span>Pagina {{page}} di {{pageCount}}</span>
+      <button (click)="goToPage(page+1)" [disabled]="page===pageCount">Next</button>
+    </div>
+
+    <p *ngIf="products.length === 0">Nessun prodotto disponibile.</p>
+  </ng-template>
+
+  <div class="modal" *ngIf="selectedProduct">
+    <div class="modal-content">
+      <button class="modal-close" (click)="closeDetail()">✕</button>
+      <h2>{{selectedProduct?.name}}</h2>
+      <div *ngIf="getDetailSrc(selectedProduct) && !isImageFailed(selectedProduct)" class="detail-image">
+        <img (error)="onImageError(selectedProduct)" [src]="getDetailSrc(selectedProduct)" alt="{{selectedProduct?.name}}" />
+      </div>
+      <ng-template #detailPlaceholder>
+        <div class="detail-image placeholder">
+          <svg viewBox="0 0 24 24" width="120" height="120" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21 19V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M21 19H3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            <path d="M16 10l-2.5 3.01L12 11l-4 5h12z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </ng-template>
+      <p>{{selectedProduct?.description}}</p>
+      <p class="price">{{ selectedProduct?.price | currency:'EUR':'symbol':'1.2-2' }}</p>
+    </div>
+  </div>
+
+  <div class="cart-modal" *ngIf="cartOpen">
+    <div class="cart-panel">
+      <h3>Carrello ({{ cartCount }})</h3>
+      <div *ngFor="let item of cart" class="cart-item">
+        <div class="ci-name">{{ item.name }}</div>
+        <div class="ci-qty">
+          <button (click)="changeCartQty(item, item.quantity - 1)">−</button>
+          <input type="number" [value]="item.quantity" (change)="changeCartQty(item, $any($event.target).value)" />
+          <button (click)="changeCartQty(item, item.quantity + 1)">+</button>
+        </div>
+        <div class="ci-price">{{ item.price | currency:'EUR':'symbol':'1.2-2' }}</div>
+        <button class="remove-btn" (click)="removeFromCart(item)">Rimuovi</button>
+      </div>
+
+      <div class="cart-summary">
+        <div>Totale:</div>
+        <div>{{ cartTotal | currency:'EUR':'symbol':'1.2-2' }}</div>
+      </div>
+
+      <div class="cart-actions">
+        <button (click)="closeCart()">Chiudi</button>
+        <button class="btn-accent">Checkout</button>
+      </div>
+    </div>
+  </div>
 </main>
