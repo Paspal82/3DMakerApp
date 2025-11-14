@@ -24,5 +24,8 @@ namespace _3DMakerApp.Server.Models
 
         public byte[]? ThumbnailDetail { get; set; }
         public string? ThumbnailDetailContentType { get; set; }
+
+        // Optional. If not provided, defaults to now (UTC)
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

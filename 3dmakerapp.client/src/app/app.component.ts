@@ -1,24 +1,52 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
+
+interface ProductImage {
+  id?: string;
+  productId: string;
+  order: number;
+  isCover: boolean;
+  image?: string; // base64
+  imageContentType?: string;
+  thumbnailCard?: string; // base64 220x220
+  thumbnailCardContentType?: string;
+  thumbnailDetail?: string; // base64 512x512
+  thumbnailDetailContentType?: string;
+  thumbnailSlider?: string; // base64 120x120
+  thumbnailSliderContentType?: string;
+  createdAt?: string;
+}
 
 interface Product {
   id?: string;
   name: string;
   description: string;
   price: number;
-  image?: string | null; // base64 full image
+  image?: string | null; // base64 full image (legacy - keep for backward compatibility)
   imageContentType?: string | null;
-  thumbnailCard?: string | null; // base64 thumbnail for card
+  thumbnailCard?: string | null; // base64 thumbnail for card (legacy)
   thumbnailCardContentType?: string | null;
-  thumbnailDetail?: string | null; // base64 thumbnail for detail modal
+  thumbnailDetail?: string | null; // base64 thumbnail for detail modal (legacy)
   thumbnailDetailContentType?: string | null;
+  images?: ProductImage[]; // New: multiple images
+  coverImageId?: string; // New: reference to cover image
 }
 
 interface CartItem {
   productId: string;
   name: string;
+  description: string;
   price: number;
   quantity: number;
+  thumbnailCard?: string | null;  // Caricata dinamicamente
+  thumbnailCardContentType?: string | null;  // Caricata dinamicamente
+}
+
+interface ProductButtonState {
+  expanded: boolean;
+  loading: boolean;
 }
 
 @Component({
@@ -27,7 +55,7 @@ interface CartItem {
   standalone: false,
   styleUrls: ['./app.component.css']
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   title = '3dmakerapp.client';
   public products: Product[] = [];
 
@@ -36,11 +64,16 @@ export class AppComponent implements OnInit {
 
   public search: string = '';
   public nameFilter: string = '';
+  public sortBy: string = '';
   public names: string[] = [];
 
   public page = 1;
   public pageSize = 12;
   public total = 0;
+
+  // Search debounce
+  private searchSubject = new Subject<string>();
+  private searchSubscription?: Subscription;
 
   // new product form fields
   public newName = '';
@@ -50,7 +83,14 @@ export class AppComponent implements OnInit {
   public selectedPreviewUrl: string | null = null;
   public selectedFileError: string | null = null; // validation error for file
 
+  // Multi-image upload
+  public selectedFiles: File[] = [];
+  public selectedPreviews: { file: File; url: string; isCover: boolean }[] = [];
+  public uploadingImages = false;
+
   public selectedProduct: Product | null = null; // for detail modal
+  public selectedProductImages: ProductImage[] = []; // Images for selected product
+  public currentImageIndex = 0; // For slider in detail modal
 
   // theme settings
   public theme: 'light' | 'dark' = 'dark';
@@ -60,9 +100,17 @@ export class AppComponent implements OnInit {
   private productQuantities: Record<string, number> = {};
 
   public cartOpen = false; // show cart modal
+  public cartClosing = false; // track closing animation
+  public menuOpen = false; // mobile menu state
+  public showClearCartConfirm = false; // show clear cart confirmation modal
+  public showFilterModal = false; // show filter modal on mobile
+  public showSortModal = false; // show sort modal on mobile
 
   // track images that failed to load so we can show placeholder
   public imageFailed: Record<string, boolean> = {};
+
+  // track button states per product
+  public buttonStates: Record<string, ProductButtonState> = {};
 
   constructor(private http: HttpClient) {}
 
@@ -76,11 +124,30 @@ export class AppComponent implements OnInit {
 
     this.applyTheme();
 
-    // restore cart
+    // restore cart (without images)
     try {
       const raw = localStorage.getItem('cart');
-      if (raw) this.cart = JSON.parse(raw) as CartItem[];
+      if (raw) {
+        this.cart = JSON.parse(raw) as CartItem[];
+        // Images will be loaded from DB when cart is opened
+        console.log('Cart restored from localStorage (images will be loaded from DB):', this.cart.length, 'items');
+      }
     } catch {}
+
+    // Search subscription
+    this.searchSubscription = this.searchSubject
+      .pipe(
+        debounceTime(300), // wait for 300ms pause in events
+        distinctUntilChanged() // only emit if value is different from previous
+      )
+      .subscribe((searchTerm) => {
+        this.search = searchTerm;
+        this.loadProducts(1);
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.searchSubscription?.unsubscribe();
   }
 
   applyTheme() {
@@ -123,16 +190,23 @@ export class AppComponent implements OnInit {
 
     if (this.search) params = params.set('search', this.search);
     if (this.nameFilter) params = params.set('name', this.nameFilter);
+    if (this.sortBy) params = params.set('sortBy', this.sortBy);
 
     this.http.get<any>('/api/products/query', { params }).subscribe({
       next: (res) => {
         this.products = res.items || [];
         this.total = res.total || 0;
+        
         // ensure default quantities exist
         for (const p of this.products) {
           if (p.id && !this.productQuantities[p.id]) this.productQuantities[p.id] = 1;
           // reset imageFailed for new items
           if (p.id && this.imageFailed[p.id]) delete this.imageFailed[p.id];
+          
+          // Load images for each product
+          if (p.id) {
+            this.loadProductImages(p.id);
+          }
         }
       },
       error: (err) => {
@@ -143,10 +217,18 @@ export class AppComponent implements OnInit {
   }
 
   onSearch() {
-    this.loadProducts(1);
+    this.searchSubject.next(this.search);
+  }
+
+  onSearchInput(value: string) {
+    this.searchSubject.next(value);
   }
 
   onFilterChange() {
+    this.loadProducts(1);
+  }
+
+  onSortChange() {
     this.loadProducts(1);
   }
 
@@ -180,18 +262,45 @@ export class AppComponent implements OnInit {
   }
 
   // cart operations
-  addToCart(p: Product) {
-    if (!p.id) return;
-    const qty = this.getQty(p);
-    const existing = this.cart.find(c => c.productId === p.id);
-    if (existing) {
-      existing.quantity = Math.min(999, existing.quantity + qty);
-    } else {
-      this.cart.push({ productId: p.id, name: p.name, price: p.price, quantity: qty });
+  getButtonState(p: Product): ProductButtonState {
+    if (!p.id) return { expanded: false, loading: false };
+    if (!this.buttonStates[p.id]) {
+      this.buttonStates[p.id] = { expanded: false, loading: false };
     }
-    this.saveCart();
-    this.lastSuccess = `${qty} x ${p.name} aggiunto al carrello.`;
-    setTimeout(() => this.lastSuccess = null, 3000);
+    return this.buttonStates[p.id];
+  }
+
+  addToCart(p: Product, event?: MouseEvent) {
+    if (event) event.stopPropagation();
+    if (!p.id) return;
+    
+    const state = this.getButtonState(p);
+    if (!state) return;
+    
+    state.loading = true;
+    
+    setTimeout(() => {
+      const qty = this.getQty(p);
+      const existing = this.cart.find(c => c.productId === p.id!);
+      if (existing) {
+        existing.quantity = Math.min(999, existing.quantity + qty);
+      } else {
+        if (p.id) {
+          // Save only product metadata, NOT the image
+          this.cart.push({ 
+            productId: p.id, 
+            name: p.name, 
+            description: p.description,
+            price: p.price, 
+            quantity: qty
+            // thumbnailCard and thumbnailCardContentType will be loaded from DB when cart opens
+          });
+        }
+      }
+      this.saveCart();
+      
+      state.loading = false;
+    }, 800);
   }
 
   saveCart() {
@@ -199,8 +308,108 @@ export class AppComponent implements OnInit {
   }
 
   // cart UI
-  openCart() { this.cartOpen = true; }
-  closeCart() { this.cartOpen = false; }
+  openCart() { 
+    this.cartOpen = true;
+    this.cartClosing = false;
+    // Load product images for cart items from DB
+    this.loadCartItemImages();
+  }
+  
+  closeCart() { 
+    this.cartClosing = true;
+    setTimeout(() => {
+      this.cartOpen = false;
+      this.cartClosing = false;
+    }, 300); // match animation duration
+  }
+
+  private loadCartItemImages() {
+    // Load images for all cart items that don't have them yet
+    this.cart.forEach(item => {
+      if (!item.thumbnailCard && item.productId) {
+        this.http.get<Product>(`/api/products/${item.productId}`).subscribe({
+          next: (product) => {
+            if (product.thumbnailCard && product.thumbnailCardContentType) {
+              item.thumbnailCard = product.thumbnailCard;
+              item.thumbnailCardContentType = product.thumbnailCardContentType;
+            }
+          },
+          error: (err) => {
+            console.error(`Failed to load image for product ${item.productId}`, err);
+          }
+        });
+      }
+    });
+  }
+
+  clearCart() {
+    this.showClearCartConfirm = true;
+  }
+
+  confirmClearCart() {
+    this.cart = [];
+    this.saveCart();
+    this.showClearCartConfirm = false;
+  }
+
+  cancelClearCart() {
+    this.showClearCartConfirm = false;
+  }
+
+  toggleMenu() {
+    this.menuOpen = !this.menuOpen;
+  }
+
+  closeMenu() {
+    this.menuOpen = false;
+  }
+
+  openFilterModal() {
+    this.showFilterModal = true;
+  }
+
+  closeFilterModal() {
+    this.showFilterModal = false;
+  }
+
+  selectFilter(name: string) {
+    this.nameFilter = name;
+    this.closeFilterModal();
+    this.onFilterChange();
+  }
+
+  openSortModal() {
+    this.showSortModal = true;
+  }
+
+  closeSortModal() {
+    this.showSortModal = false;
+  }
+
+  selectSort(sortBy: string) {
+    this.sortBy = sortBy;
+    this.closeSortModal();
+    this.onSortChange();
+  }
+
+  getSortLabel(sortBy: string): string {
+    const labels: Record<string, string> = {
+      'newest': 'Ultimi inseriti',
+      'price-asc': 'Prezzo: crescente',
+      'price-desc': 'Prezzo: decrescente',
+      'name-asc': 'Nome: A-Z',
+      'name-desc': 'Nome: Z-A'
+    };
+    return labels[sortBy] || 'Ordina per...';
+  }
+
+  // Reset filters and reload all products
+  resetFilters() {
+    this.search = '';
+    this.nameFilter = '';
+    this.sortBy = '';
+    this.loadProducts(1);
+  }
 
   removeFromCart(item: CartItem) {
     this.cart = this.cart.filter(c => c.productId !== item.productId);
@@ -319,124 +528,262 @@ export class AppComponent implements OnInit {
     }
   }
 
-  // limit price input to at most 2 decimals and sanitize characters
-  onPriceInput() {
-    let s = this.newPrice ?? '';
-    if (!s) return;
+  // Multi-image file selection with preview
+  onMultiFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    this.selectedFileError = null;
 
-    // keep only digits and separators
-    s = s.replace(/[^0-9.,-]/g, '');
+    if (input.files && input.files.length > 0) {
+      const files = Array.from(input.files);
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+      const maxSize = 5 * 1024 * 1024; // 5 MB per image
 
-    // find last separator (dot or comma)
-    const lastDot = s.lastIndexOf('.');
-    const lastComma = s.lastIndexOf(',');
-    const sepIndex = Math.max(lastDot, lastComma);
+      for (const file of files) {
+        if (!allowedTypes.includes(file.type)) {
+          this.selectedFileError = `File ${file.name}: solo PNG o JPEG consentiti.`;
+          continue;
+        }
 
-    if (sepIndex === -1) {
-      // no decimal separator
-      // remove any other separators just in case
-      this.newPrice = s.replace(/[.,]/g, '');
-      return;
+        if (file.size > maxSize) {
+          this.selectedFileError = `File ${file.name}: massimo 5 MB.`;
+          continue;
+        }
+
+        // Generate preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const targetSize = 120;
+            const canvas = document.createElement('canvas');
+            canvas.width = targetSize;
+            canvas.height = targetSize;
+            const ctx = canvas.getContext('2d');
+            
+            if (ctx) {
+              const scale = Math.max(targetSize / img.width, targetSize / img.height);
+              const drawW = Math.round(img.width * scale);
+              const drawH = Math.round(img.height * scale);
+              const offsetX = Math.round((targetSize - drawW) / 2);
+              const offsetY = Math.round((targetSize - drawH) / 2);
+              
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+              
+              const dataUrl = canvas.toDataURL(file.type);
+              this.selectedPreviews.push({
+                file: file,
+                url: dataUrl,
+                isCover: this.selectedPreviews.length === 0 // First image is cover
+              });
+            }
+          };
+          img.src = e.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+      }
+
+      this.selectedFiles = files;
     }
-
-    const sep = s[sepIndex];
-    let intPart = s.slice(0, sepIndex).replace(/[.,]/g, '');
-    let frac = s.slice(sepIndex + 1).replace(/[.,]/g, '');
-
-    if (frac.length > 2) {
-      frac = frac.slice(0, 2);
-    }
-
-    this.newPrice = intPart + sep + frac;
   }
 
-  // create product using multipart/form-data
-  createProduct() {
-    this.lastError = null;
-    if (!this.newName) {
-      this.lastError = 'Il nome è obbligatorio.';
-      return;
-    }
+  // Toggle cover image selection
+  toggleCoverImage(index: number) {
+    this.selectedPreviews.forEach((preview, i) => {
+      preview.isCover = i === index;
+    });
+  }
 
-    if (this.selectedFileError) {
-      this.lastError = this.selectedFileError;
-      return;
+  // Remove preview image
+  removePreviewImage(index: number) {
+    this.selectedPreviews.splice(index, 1);
+    this.selectedFiles.splice(index, 1);
+    
+    // If removed was cover, set first as cover
+    if (this.selectedPreviews.length > 0 && !this.selectedPreviews.some(p => p.isCover)) {
+      this.selectedPreviews[0].isCover = true;
     }
+  }
 
-    // basic client-side price validation: accept both comma and dot
-    const priceVal = this.newPrice?.toString() ?? '';
-    const normalized = priceVal.replace(',', '.');
-    const parsed = Number(normalized);
-    if (priceVal && (isNaN(parsed) || !isFinite(parsed))) {
-      this.lastError = 'Formato prezzo non valido.';
-      return;
-    }
+  // Upload multiple images for a product
+  async uploadProductImages(productId: string) {
+    if (this.selectedFiles.length === 0) return;
 
+    this.uploadingImages = true;
     const formData = new FormData();
-    formData.append('Name', this.newName);
-    formData.append('Description', this.newDescription);
-    formData.append('Price', this.newPrice || '0');
-    if (this.selectedFile) {
-      formData.append('Image', this.selectedFile, this.selectedFile.name);
-    }
+    
+    this.selectedFiles.forEach((file) => {
+      formData.append('Images', file, file.name);
+    });
 
-    this.http.post<Product>('/api/products', formData).subscribe({
-      next: (created) => {
-        this.resetNewProduct();
-        // refresh list and names
-        this.loadNames();
-        this.loadProducts(1);
+    this.http.post<ProductImage[]>(`/api/products/${productId}/images`, formData).subscribe({
+      next: async (images) => {
+        console.log('Images uploaded:', images.length);
+        
+        // Set cover image if specified
+        const coverIndex = this.selectedPreviews.findIndex(p => p.isCover);
+        if (coverIndex >= 0 && images[coverIndex]?.id) {
+          await this.http.put(`/api/products/${productId}/images/${images[coverIndex].id}/set-cover`, {}).toPromise();
+        }
+        
+        this.uploadingImages = false;
+        this.resetImageUpload();
+        this.loadProducts(); // Refresh product list
       },
       error: (err) => {
-        console.error('Failed to create product', err);
-        this.lastError = 'Impossibile creare il prodotto.';
+        console.error('Failed to upload images', err);
+        this.lastError = 'Impossibile caricare le immagini.';
+        this.uploadingImages = false;
       }
     });
   }
 
-  resetNewProduct() {
-    this.newName = '';
-    this.newDescription = '';
-    this.newPrice = '';
-    this.selectedFile = null;
+  // Reset image upload state
+  resetImageUpload() {
+    this.selectedFiles = [];
+    this.selectedPreviews = [];
     this.selectedFileError = null;
-    if (this.selectedPreviewUrl) {
-      URL.revokeObjectURL(this.selectedPreviewUrl);
-      this.selectedPreviewUrl = null;
+  }
+
+  // Load images for a product
+  loadProductImages(productId: string) {
+    this.http.get<ProductImage[]>(`/api/products/${productId}/images`).subscribe({
+      next: (images) => {
+        if (this.selectedProduct?.id === productId) {
+          this.selectedProductImages = images;
+          this.currentImageIndex = 0;
+        }
+        
+        // Attach images to product in products list
+        const product = this.products.find(p => p.id === productId);
+        if (product) {
+          product.images = images;
+          product.coverImageId = images.find(img => img.isCover)?.id;
+        }
+      },
+      error: (err) => {
+        console.error('Failed to load product images', err);
+      }
+    });
+  }
+
+  // Set cover image
+  setCoverImage(productId: string, imageId: string) {
+    this.http.put(`/api/products/${productId}/images/${imageId}/set-cover`, {}).subscribe({
+      next: () => {
+        this.loadProductImages(productId);
+      },
+      error: (err) => {
+        console.error('Failed to set cover image', err);
+      }
+    });
+  }
+
+  // Delete product image
+  deleteProductImage(productId: string, imageId: string) {
+    this.http.delete(`/api/products/${productId}/images/${imageId}`).subscribe({
+      next: () => {
+        this.loadProductImages(productId);
+      },
+      error: (err) => {
+        console.error('Failed to delete image', err);
+      }
+    });
+  }
+
+  // Slider navigation
+  nextImage() {
+    if (this.selectedProductImages.length > 0) {
+      this.currentImageIndex = (this.currentImageIndex + 1) % this.selectedProductImages.length;
     }
   }
 
-  // Reset filters and reload all products
-  resetFilters() {
-    this.search = '';
-    this.nameFilter = '';
-    this.loadProducts(1);
+  previousImage() {
+    if (this.selectedProductImages.length > 0) {
+      this.currentImageIndex = (this.currentImageIndex - 1 + this.selectedProductImages.length) % this.selectedProductImages.length;
+    }
+  }
+
+  goToImage(index: number) {
+    this.currentImageIndex = index;
+  }
+
+  getCurrentImage(): ProductImage | null {
+    return this.selectedProductImages[this.currentImageIndex] || null;
   }
 
   // Detail modal
   openDetail(p: Product) {
     this.selectedProduct = p;
+    this.currentImageIndex = 0;
+    if (p.id) {
+      this.loadProductImages(p.id);
+    }
+  }
+
+  openDetailFromCart(item: CartItem) {
+    // Close cart immediately for better UX
+    this.closeCart();
+    
+    // Load product in parallel - if we already have it in products list, use it
+    const existingProduct = this.products.find(p => p.id === item.productId);
+    
+    if (existingProduct) {
+      // Open detail immediately with cached product
+      setTimeout(() => {
+        this.selectedProduct = existingProduct;
+        this.currentImageIndex = 0;
+        if (existingProduct.id) {
+          this.loadProductImages(existingProduct.id);
+        }
+      }, 350);
+    } else {
+      // Load from server but still open quickly
+      setTimeout(() => {
+        // Show loading state with placeholder data
+        this.selectedProduct = {
+          id: item.productId,
+          name: item.name,
+          description: item.description,
+          price: item.price
+        } as Product;
+        this.currentImageIndex = 0;
+      }, 350);
+      
+      // Then load full details in background
+      this.http.get<Product>(`/api/products/${item.productId}`).subscribe({
+        next: (product) => {
+          if (this.selectedProduct?.id === item.productId) {
+            this.selectedProduct = product;
+            this.loadProductImages(item.productId);
+          }
+        },
+        error: (err) => {
+          console.error(`Failed to load product ${item.productId}`, err);
+        }
+      });
+    }
   }
 
   closeDetail() {
     this.selectedProduct = null;
+    this.selectedProductImages = [];
+    this.currentImageIndex = 0;
   }
 
-  openFullImage(p: Product | null) {
-    if (!p) return;
-    if (p.image && p.imageContentType) {
-      const url = 'data:' + p.imageContentType + ';base64,' + p.image;
-      const win = window.open();
-      if (win) {
-        win.document.write('<title>' + (p.name || 'Image') + '</title>');
-        win.document.write('<img src="' + url + '" style="max-width:100%;height:auto;display:block;margin:0 auto;"/>');
-      }
-    }
-  }
-
-  // helper to get card image/data url (handles different JSON property casings)
+  // helper to get card image/data url (handles different JSON property casings and new images array)
   getCardSrc(p: any): string | null {
     if (!p) return null;
+    
+    // Try new images array first (cover image)
+    if (p.images && Array.isArray(p.images) && p.images.length > 0) {
+      const coverImage = p.images.find((img: ProductImage) => img.isCover) || p.images[0];
+      if (coverImage?.thumbnailCard && coverImage?.thumbnailCardContentType) {
+        return `data:${coverImage.thumbnailCardContentType};base64,${coverImage.thumbnailCard}`;
+      }
+    }
+    
+    // Fallback to legacy single image
     const data = p.thumbnailCard ?? p.ThumbnailCard ?? p.image ?? p.Image ?? null;
     const type = p.thumbnailCardContentType ?? p.ThumbnailCardContentType ?? p.imageContentType ?? p.ImageContentType ?? null;
     if (!data || !type) return null;
@@ -446,10 +793,39 @@ export class AppComponent implements OnInit {
   // helper for detail image src
   getDetailSrc(p: any): string | null {
     if (!p) return null;
+    
+    // Try new images array first (current slider image)
+    const currentImage = this.getCurrentImage();
+    if (currentImage?.thumbnailDetail && currentImage?.thumbnailDetailContentType) {
+      return `data:${currentImage.thumbnailDetailContentType};base64,${currentImage.thumbnailDetail}`;
+    }
+    
+    // Try images array (cover image)
+    if (p.images && Array.isArray(p.images) && p.images.length > 0) {
+      const coverImage = p.images.find((img: ProductImage) => img.isCover) || p.images[0];
+      if (coverImage?.thumbnailDetail && coverImage?.thumbnailDetailContentType) {
+        return `data:${coverImage.thumbnailDetailContentType};base64,${coverImage.thumbnailDetail}`;
+      }
+    }
+    
+    // Fallback to legacy single image
     const data = p.thumbnailDetail ?? p.ThumbnailDetail ?? p.image ?? p.Image ?? null;
     const type = p.thumbnailDetailContentType ?? p.ThumbnailDetailContentType ?? p.imageContentType ?? p.ImageContentType ?? null;
     if (!data || !type) return null;
     return `data:${type};base64,${data}`;
+  }
+
+  // Get slider thumbnail src
+  getSliderThumbSrc(image: ProductImage): string | null {
+    if (!image) return null;
+    if (image.thumbnailSlider && image.thumbnailSliderContentType) {
+      return `data:${image.thumbnailSliderContentType};base64,${image.thumbnailSlider}`;
+    }
+    // Fallback to card thumbnail
+    if (image.thumbnailCard && image.thumbnailCardContentType) {
+      return `data:${image.thumbnailCardContentType};base64,${image.thumbnailCard}`;
+    }
+    return null;
   }
 
   // helper to check if image failed for product (avoids indexing with undefined)
@@ -458,6 +834,11 @@ export class AppComponent implements OnInit {
     const id = p.id ?? p.Id ?? null;
     if (!id) return false;
     return !!this.imageFailed[id];
+  }
+
+  getItemImageSrc(item: CartItem): string | null {
+    if (!item.thumbnailCard || !item.thumbnailCardContentType) return null;
+    return `data:${item.thumbnailCardContentType};base64,${item.thumbnailCard}`;
   }
 }
 

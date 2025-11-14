@@ -26,12 +26,12 @@ namespace _3DMakerApp.Server.Controllers
         }
 
         [HttpGet("query")]
-        public async Task<IActionResult> Query([FromQuery] string? search, [FromQuery] string? name, [FromQuery] int page = 1, [FromQuery] int pageSize = 12)
+        public async Task<IActionResult> Query([FromQuery] string? search, [FromQuery] string? name, [FromQuery] int page = 1, [FromQuery] int pageSize = 12, [FromQuery] string? sortBy = null)
         {
             if (page <= 0) page = 1;
             if (pageSize <= 0) pageSize = 12;
 
-            var (items, total) = await _service.QueryAsync(search, name, page, pageSize);
+            var (items, total) = await _service.QueryAsync(search, name, page, pageSize, sortBy);
 
             // Ensure thumbnails exist for items returned (generate on-the-fly for products imported before thumbnail generation was added)
             var tasks = new List<Task>();
@@ -95,6 +95,23 @@ namespace _3DMakerApp.Server.Controllers
         {
             var product = await _service.GetAsync(id);
             if (product == null) return NotFound();
+
+            // Generate thumbnails on-the-fly if missing (like in Query endpoint)
+            if ((product.ThumbnailCard == null || product.ThumbnailCard.Length == 0) && product.Image != null && product.Image.Length > 0)
+            {
+                try
+                {
+                    using var msImg = new MemoryStream(product.Image);
+                    var (thumb, ctype) = await GenerateThumbnailAsync(msImg, 220, product.ImageContentType ?? "image/png");
+                    product.ThumbnailCard = thumb;
+                    product.ThumbnailCardContentType = ctype;
+                }
+                catch
+                {
+                    // ignore thumbnail generation errors
+                }
+            }
+
             return product;
         }
 
