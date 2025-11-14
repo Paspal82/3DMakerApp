@@ -152,6 +152,25 @@ body.theme-dark .card:hover {
     gap: 0.5rem;
     background: var(--card-bg);
     border-radius: 0 0 12px 12px;
+    position: relative;
+}
+
+.card-body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 0 0 12px 12px;
+    pointer-events: none;
+}
+
+body.theme-dark .card-body::before {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.card-body > * {
+    position: relative;
+    z-index: 1;
 }
 
 .card-title {
@@ -208,30 +227,41 @@ body.theme-dark .card:hover {
     font-size: 1rem;
 }
 
-/* Action buttons - Goovi style with hover effect */
-.card-actions {
-    gap: 0.5rem;
-    display: flex;
-    align-items: center;
-}
-
+/* Action buttons - simple style */
 .icon-btn {
-    background: transparent;
-    border: 1px solid var(--text-color);
+    background: white;
+    border: 1px solid white;
     box-shadow: none;
     padding: 0.5rem 0.6rem;
-    border-radius: 50%;
+    border-radius: 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    color: var(--text-color);
-    transition: background 0.3s ease, color 0.3s ease;
+    color: #333;
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    min-width: 36px;
+    height: 36px;
 }
 
 .icon-btn:hover, .icon-btn:focus-visible {
-    background: var(--text-color);
-    color: var(--bg-color);
+    background: #333;
+    color: white;
+    border-color: #333;
+}
+
+/* Dark theme specific button styling */
+body.theme-dark .icon-btn {
+    background: #0b0f12;
+    border-color: #0b0f12;
+    color: white;
+}
+
+body.theme-dark .icon-btn:hover,
+body.theme-dark .icon-btn:focus-visible {
+    background: white;
+    color: #0b0f12;
+    border-color: white;
 }
 
 .cart-btn svg, .goto-btn svg {
@@ -242,25 +272,43 @@ body.theme-dark .card:hover {
     display: none;
 }
 
-.create {
-    background: transparent;
-    margin-bottom: 2rem;
+/* Loader for cart button */
+.icon-btn.loading {
+    pointer-events: none;
+    position: relative;
 }
 
-.create-form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: flex-start;
-    color: var(--text-color);
+.icon-btn.loading svg {
+    opacity: 0;
 }
 
-.create-form input[type="file"] {
-    color: var(--text-color);
+.icon-btn.loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
 }
 
-.file-error {
-    color: var(--file-error-color);
+@keyframes spin {
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+    .cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem 1rem; }
+}
+
+@media (max-width: 600px) {
+    :host { padding: 1rem; }
+    .cards { grid-template-columns: repeat(2, 1fr); gap: 1.5rem 0.75rem; }
+    .controls { flex-direction: column; width: 100%; }
+    .controls input, .controls select { width: 100%; }
 }
 
 /* Modal */
@@ -279,74 +327,100 @@ body.theme-dark .card:hover {
     padding: 2rem;
     border-radius: 12px;
     width: 90%;
-    max-width: 720px;
+    max-width: 600px;
     position: relative;
     color: var(--modal-text);
     text-align: left;
     border: 1px solid rgba(0,0,0,0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
-.modal-content h2 {
-    text-align: center;
-    margin-top: 0;
+.detail-image-wrapper {
+    position: relative;
+    width: 100%;
+    border-radius: 12px;
 }
 
 .modal-close {
     position: absolute;
-    right: 1rem;
-    top: 1rem;
-    background: transparent;
-    border: none;
-    font-size: 1.5rem;
-    color: var(--muted-color);
+    right: 0.5rem;
+    top: 0.5rem;
+    background: white;
+    border: 1px solid white;
+    font-size: 1.25rem;
+    color: #333;
     cursor: pointer;
-    padding: 0.25rem;
+    padding: 0.5rem;
+    z-index: 2;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    background: #333;
+    color: white;
+    border-color: #333;
+}
+
+.detail-image {
+    width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #f5f5f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
 }
 
 .detail-image img {
     width: 100%;
-    max-height: 400px;
-    object-fit: contain;
-    margin-bottom: 1rem;
-    border-radius: 12px;
-    cursor: pointer;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
-.pagination {
-    margin-top: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
+.detail-image.placeholder {
+    background: linear-gradient(135deg, #f5f5f5, #e8e8e8);
 }
 
-/* Badge/label style (optional for future "Best Seller", "Novità") */
-.badge {
-    position: absolute;
-    top: 0.5rem;
-    left: 0.5rem;
-    background: var(--accent-color);
-    color: white;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.75rem;
+.detail-image.placeholder svg {
+    color: #999;
+    opacity: 0.5;
+}
+
+.detail-title {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.25rem;
     text-transform: uppercase;
-    font-weight: 600;
-    z-index: 2;
+    letter-spacing: 0.5px;
+    color: var(--modal-text);
+    text-align: left;
 }
 
-/* Hide old controls */
-.add-cart-btn { display: none !important; }
-.qty-controls { display: none !important; }
-.detail-btn { display: none !important; }
-
-@media (max-width: 900px) {
-    .cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem 1rem; }
+.detail-description {
+    margin: 0;
+    color: var(--muted-color);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    text-align: left;
 }
 
-@media (max-width: 600px) {
-    :host { padding: 1rem; }
-    .cards { grid-template-columns: repeat(2, 1fr); gap: 1.5rem 0.75rem; }
-    .controls { flex-direction: column; width: 100%; }
-    .controls input, .controls select { width: 100%; }
+.detail-price {
+    font-weight: 700;
+    color: var(--modal-text);
+    margin: 0;
+    font-size: 1.25rem;
+    text-align: left;
 }

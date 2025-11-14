@@ -10,7 +10,7 @@
     <span class="cart-count">{{ cartCount }}</span>
   </button>
 
-  <h1>Prodotti</h1>
+  <h1>ARTICOLI</h1>
 
   <!-- success popup centered -->
   <div *ngIf="lastSuccess" class="success-popup" role="status" aria-live="polite">
@@ -18,30 +18,24 @@
   </div>
 
   <section class="controls">
-    <input type="text" placeholder="Cerca..." [(ngModel)]="search" (keyup.enter)="onSearch()" />
+    <input type="text" placeholder="Cerca articolo..." [(ngModel)]="search" (keyup.enter)="onSearch()" />
 
     <select [(ngModel)]="nameFilter" (change)="onFilterChange()">
-      <option value="">Tutti i nomi</option>
+      <option value="">Lista articoli</option>
       <option *ngFor="let n of names" [value]="n">{{ n }}</option>
     </select>
 
-    <button (click)="onSearch()">Cerca</button>
-    <button (click)="resetFilters">Reset filtri</button>
-  </section>
+    <select [(ngModel)]="sortBy" (change)="onSortChange()">
+      <option value="" disabled>Ordina per...</option>
+      <option value="newest">Ultimi inseriti</option>
+      <option value="price-asc">Prezzo: crescente</option>
+      <option value="price-desc">Prezzo: decrescente</option>
+      <option value="name-asc">Nome: A-Z</option>
+      <option value="name-desc">Nome: Z-A</option>
+    </select>
 
-  <section class="create">
-    <h2>Nuovo prodotto</h2>
-    <div class="create-form">
-      <input placeholder="Nome" [(ngModel)]="newName" />
-      <input placeholder="Descrizione" [(ngModel)]="newDescription" />
-      <input type="text" placeholder="Prezzo (es. 8,5 o 8.5)" [(ngModel)]="newPrice" (input)="onPriceInput()" />
-      <input type="file" (change)="onFileSelected($event)" accept="image/png, image/jpeg" />
-      <div *ngIf="selectedPreviewUrl" class="preview">
-        <img [src]="selectedPreviewUrl" alt="preview" />
-      </div>
-      <div *ngIf="selectedFileError" class="file-error">{{ selectedFileError }}</div>
-      <button (click)="createProduct()" [disabled]="!!selectedFileError">Crea prodotto</button>
-    </div>
+    <button (click)="onSearch()">Cerca</button>
+    <button (click)="resetFilters()">Reset filtri</button>
   </section>
 
   <section *ngIf="lastError; else productList">
@@ -50,7 +44,7 @@
 
   <ng-template #productList>
     <div class="cards">
-      <div class="card" *ngFor="let p of products">
+      <div class="card" *ngFor="let p of products" (click)="openDetail(p)">
         <div class="thumb" *ngIf="getCardSrc(p) && !isImageFailed(p); else placeholder">
           <img (error)="onImageError(p)" [src]="getCardSrc(p)" alt="{{p.name}}" />
         </div>
@@ -71,18 +65,17 @@
           <div class="card-footer">
             <p class="price">{{ p.price | currency:'EUR':'symbol':'1.2-2' }}</p>
             
-            <button class="icon-btn cart-btn" (click)="addToCart(p)" aria-label="Aggiungi al carrello" title="Aggiungi al carrello">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <button 
+              class="icon-btn cart-btn" 
+              [class.loading]="getButtonState(p).loading"
+              (click)="addToCart(p, $event)"
+              aria-label="Aggiungi al carrello" 
+              title="Aggiungi al carrello">
+              
+              <svg *ngIf="!getButtonState(p).loading" viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M3 6h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M16 10a4 4 0 0 1-8 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-
-            <button class="icon-btn goto-btn" (click)="openDetail(p)" aria-label="Dettaglio" title="Dettaglio">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </button>
           </div>
@@ -101,22 +94,23 @@
 
   <div class="modal" *ngIf="selectedProduct">
     <div class="modal-content">
-      <button class="modal-close" (click)="closeDetail()">✕</button>
-      <h2>{{selectedProduct?.name}}</h2>
-      <div *ngIf="getDetailSrc(selectedProduct) && !isImageFailed(selectedProduct)" class="detail-image">
-        <img (error)="onImageError(selectedProduct)" [src]="getDetailSrc(selectedProduct)" alt="{{selectedProduct?.name}}" />
-      </div>
-      <ng-template #detailPlaceholder>
-        <div class="detail-image placeholder">
+      <div class="detail-image-wrapper">
+        <button class="modal-close" (click)="closeDetail()" aria-label="Chiudi">✕</button>
+        
+        <div *ngIf="getDetailSrc(selectedProduct) && !isImageFailed(selectedProduct)" class="detail-image">
+          <img (error)="onImageError(selectedProduct)" [src]="getDetailSrc(selectedProduct)" alt="{{selectedProduct?.name}}" />
+        </div>
+        <div *ngIf="!getDetailSrc(selectedProduct) || isImageFailed(selectedProduct)" class="detail-image placeholder">
           <svg viewBox="0 0 24 24" width="120" height="120" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
-            <path d="M21 19V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M21 19H3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-            <path d="M16 10l-2.5 3.01L12 11l-4 5h12z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M21 6h-3.2l-1.6-2.4A1 1 0 0 0 15.6 3H8.4a1 1 0 0 0-.6.2L6.2 5H3a1 1 0 0 0-1 1v11.8c0 .6.4 1 .9 1H20a1 1 0 0 0 1-.9V7a1 1 0 0 0-1-1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 3l18 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
-      </ng-template>
-      <p>{{selectedProduct?.description}}</p>
-      <p class="price">{{ selectedProduct?.price | currency:'EUR':'symbol':'1.2-2' }}</p>
+      </div>
+      
+      <h2 class="detail-title">{{selectedProduct?.name}}</h2>
+      <p class="detail-description">{{selectedProduct?.description}}</p>
+      <p class="detail-price">{{ selectedProduct?.price | currency:'EUR':'symbol':'1.2-2' }}</p>
     </div>
   </div>
 

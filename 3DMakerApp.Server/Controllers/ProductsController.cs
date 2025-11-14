@@ -26,12 +26,12 @@ namespace _3DMakerApp.Server.Controllers
         }
 
         [HttpGet("query")]
-        public async Task<IActionResult> Query([FromQuery] string? search, [FromQuery] string? name, [FromQuery] int page = 1, [FromQuery] int pageSize = 12)
+        public async Task<IActionResult> Query([FromQuery] string? search, [FromQuery] string? name, [FromQuery] int page = 1, [FromQuery] int pageSize = 12, [FromQuery] string? sortBy = null)
         {
             if (page <= 0) page = 1;
             if (pageSize <= 0) pageSize = 12;
 
-            var (items, total) = await _service.QueryAsync(search, name, page, pageSize);
+            var (items, total) = await _service.QueryAsync(search, name, page, pageSize, sortBy);
 
             // Ensure thumbnails exist for items returned (generate on-the-fly for products imported before thumbnail generation was added)
             var tasks = new List<Task>();

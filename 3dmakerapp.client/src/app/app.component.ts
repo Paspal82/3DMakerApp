@@ -21,6 +21,11 @@ interface CartItem {
   quantity: number;
 }
 
+interface ProductButtonState {
+  expanded: boolean;
+  loading: boolean;
+}
+
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
@@ -36,6 +41,7 @@ export class AppComponent implements OnInit {
 
   public search: string = '';
   public nameFilter: string = '';
+  public sortBy: string = '';
   public names: string[] = [];
 
   public page = 1;
@@ -63,6 +69,9 @@ export class AppComponent implements OnInit {
 
   // track images that failed to load so we can show placeholder
   public imageFailed: Record<string, boolean> = {};
+
+  // track button states per product
+  public buttonStates: Record<string, ProductButtonState> = {};
 
   constructor(private http: HttpClient) {}
 
@@ -123,6 +132,7 @@ export class AppComponent implements OnInit {
 
     if (this.search) params = params.set('search', this.search);
     if (this.nameFilter) params = params.set('name', this.nameFilter);
+    if (this.sortBy) params = params.set('sortBy', this.sortBy);
 
     this.http.get<any>('/api/products/query', { params }).subscribe({
       next: (res) => {
@@ -147,6 +157,10 @@ export class AppComponent implements OnInit {
   }
 
   onFilterChange() {
+    this.loadProducts(1);
+  }
+
+  onSortChange() {
     this.loadProducts(1);
   }
 
@@ -180,18 +194,37 @@ export class AppComponent implements OnInit {
   }
 
   // cart operations
-  addToCart(p: Product) {
-    if (!p.id) return;
-    const qty = this.getQty(p);
-    const existing = this.cart.find(c => c.productId === p.id);
-    if (existing) {
-      existing.quantity = Math.min(999, existing.quantity + qty);
-    } else {
-      this.cart.push({ productId: p.id, name: p.name, price: p.price, quantity: qty });
+  getButtonState(p: Product): ProductButtonState {
+    if (!p.id) return { expanded: false, loading: false };
+    if (!this.buttonStates[p.id]) {
+      this.buttonStates[p.id] = { expanded: false, loading: false };
     }
-    this.saveCart();
-    this.lastSuccess = `${qty} x ${p.name} aggiunto al carrello.`;
-    setTimeout(() => this.lastSuccess = null, 3000);
+    return this.buttonStates[p.id];
+  }
+
+  addToCart(p: Product, event?: MouseEvent) {
+    if (event) event.stopPropagation();
+    if (!p.id) return;
+    
+    const state = this.getButtonState(p);
+    if (!state) return;
+    
+    state.loading = true;
+    
+    setTimeout(() => {
+      const qty = this.getQty(p);
+      const existing = this.cart.find(c => c.productId === p.id!);
+      if (existing) {
+        existing.quantity = Math.min(999, existing.quantity + qty);
+      } else {
+        if (p.id) {
+          this.cart.push({ productId: p.id, name: p.name, price: p.price, quantity: qty });
+        }
+      }
+      this.saveCart();
+      
+      state.loading = false;
+    }, 800);
   }
 
   saveCart() {
@@ -410,6 +443,7 @@ export class AppComponent implements OnInit {
   resetFilters() {
     this.search = '';
     this.nameFilter = '';
+    this.sortBy = '';
     this.loadProducts(1);
   }
 
