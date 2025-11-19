@@ -95,6 +95,23 @@ namespace _3DMakerApp.Server.Controllers
         {
             var product = await _service.GetAsync(id);
             if (product == null) return NotFound();
+
+            // Generate thumbnails on-the-fly if missing (like in Query endpoint)
+            if ((product.ThumbnailCard == null || product.ThumbnailCard.Length == 0) && product.Image != null && product.Image.Length > 0)
+            {
+                try
+                {
+                    using var msImg = new MemoryStream(product.Image);
+                    var (thumb, ctype) = await GenerateThumbnailAsync(msImg, 220, product.ImageContentType ?? "image/png");
+                    product.ThumbnailCard = thumb;
+                    product.ThumbnailCardContentType = ctype;
+                }
+                catch
+                {
+                    // ignore thumbnail generation errors
+                }
+            }
+
             return product;
         }
 

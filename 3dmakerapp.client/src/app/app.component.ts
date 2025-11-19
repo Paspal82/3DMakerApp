@@ -1,5 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 
 interface Product {
   id?: string;
@@ -17,8 +19,11 @@ interface Product {
 interface CartItem {
   productId: string;
   name: string;
+  description: string;
   price: number;
   quantity: number;
+  thumbnailCard?: string | null;  // Caricata dinamicamente
+  thumbnailCardContentType?: string | null;  // Caricata dinamicamente
 }
 
 interface ProductButtonState {
@@ -32,7 +37,7 @@ interface ProductButtonState {
   standalone: false,
   styleUrls: ['./app.component.css']
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   title = '3dmakerapp.client';
   public products: Product[] = [];
 
@@ -47,6 +52,10 @@ export class AppComponent implements OnInit {
   public page = 1;
   public pageSize = 12;
   public total = 0;
+
+  // Search debounce
+  private searchSubject = new Subject<string>();
+  private searchSubscription?: Subscription;
 
   // new product form fields
   public newName = '';
@@ -66,6 +75,11 @@ export class AppComponent implements OnInit {
   private productQuantities: Record<string, number> = {};
 
   public cartOpen = false; // show cart modal
+  public cartClosing = false; // track closing animation
+  public menuOpen = false; // mobile menu state
+  public showClearCartConfirm = false; // show clear cart confirmation modal
+  public showFilterModal = false; // show filter modal on mobile
+  public showSortModal = false; // show sort modal on mobile
 
   // track images that failed to load so we can show placeholder
   public imageFailed: Record<string, boolean> = {};
@@ -85,11 +99,30 @@ export class AppComponent implements OnInit {
 
     this.applyTheme();
 
-    // restore cart
+    // restore cart (without images)
     try {
       const raw = localStorage.getItem('cart');
-      if (raw) this.cart = JSON.parse(raw) as CartItem[];
+      if (raw) {
+        this.cart = JSON.parse(raw) as CartItem[];
+        // Images will be loaded from DB when cart is opened
+        console.log('Cart restored from localStorage (images will be loaded from DB):', this.cart.length, 'items');
+      }
     } catch {}
+
+    // Search subscription
+    this.searchSubscription = this.searchSubject
+      .pipe(
+        debounceTime(300), // wait for 300ms pause in events
+        distinctUntilChanged() // only emit if value is different from previous
+      )
+      .subscribe((searchTerm) => {
+        this.search = searchTerm;
+        this.loadProducts(1);
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.searchSubscription?.unsubscribe();
   }
 
   applyTheme() {
@@ -153,7 +186,11 @@ export class AppComponent implements OnInit {
   }
 
   onSearch() {
-    this.loadProducts(1);
+    this.searchSubject.next(this.search);
+  }
+
+  onSearchInput(value: string) {
+    this.searchSubject.next(value);
   }
 
   onFilterChange() {
@@ -218,7 +255,15 @@ export class AppComponent implements OnInit {
         existing.quantity = Math.min(999, existing.quantity + qty);
       } else {
         if (p.id) {
-          this.cart.push({ productId: p.id, name: p.name, price: p.price, quantity: qty });
+          // Save only product metadata, NOT the image
+          this.cart.push({ 
+            productId: p.id, 
+            name: p.name, 
+            description: p.description,
+            price: p.price, 
+            quantity: qty
+            // thumbnailCard and thumbnailCardContentType will be loaded from DB when cart opens
+          });
         }
       }
       this.saveCart();
@@ -232,8 +277,100 @@ export class AppComponent implements OnInit {
   }
 
   // cart UI
-  openCart() { this.cartOpen = true; }
-  closeCart() { this.cartOpen = false; }
+  openCart() { 
+    this.cartOpen = true;
+    this.cartClosing = false;
+    // Load product images for cart items from DB
+    this.loadCartItemImages();
+  }
+  
+  closeCart() { 
+    this.cartClosing = true;
+    setTimeout(() => {
+      this.cartOpen = false;
+      this.cartClosing = false;
+    }, 300); // match animation duration
+  }
+
+  private loadCartItemImages() {
+    // Load images for all cart items that don't have them yet
+    this.cart.forEach(item => {
+      if (!item.thumbnailCard && item.productId) {
+        this.http.get<Product>(`/api/products/${item.productId}`).subscribe({
+          next: (product) => {
+            if (product.thumbnailCard && product.thumbnailCardContentType) {
+              item.thumbnailCard = product.thumbnailCard;
+              item.thumbnailCardContentType = product.thumbnailCardContentType;
+            }
+          },
+          error: (err) => {
+            console.error(`Failed to load image for product ${item.productId}`, err);
+          }
+        });
+      }
+    });
+  }
+
+  clearCart() {
+    this.showClearCartConfirm = true;
+  }
+
+  confirmClearCart() {
+    this.cart = [];
+    this.saveCart();
+    this.showClearCartConfirm = false;
+  }
+
+  cancelClearCart() {
+    this.showClearCartConfirm = false;
+  }
+
+  toggleMenu() {
+    this.menuOpen = !this.menuOpen;
+  }
+
+  closeMenu() {
+    this.menuOpen = false;
+  }
+
+  openFilterModal() {
+    this.showFilterModal = true;
+  }
+
+  closeFilterModal() {
+    this.showFilterModal = false;
+  }
+
+  selectFilter(name: string) {
+    this.nameFilter = name;
+    this.closeFilterModal();
+    this.onFilterChange();
+  }
+
+  openSortModal() {
+    this.showSortModal = true;
+  }
+
+  closeSortModal() {
+    this.showSortModal = false;
+  }
+
+  selectSort(sortBy: string) {
+    this.sortBy = sortBy;
+    this.closeSortModal();
+    this.onSortChange();
+  }
+
+  getSortLabel(sortBy: string): string {
+    const labels: Record<string, string> = {
+      'newest': 'Ultimi inseriti',
+      'price-asc': 'Prezzo: crescente',
+      'price-desc': 'Prezzo: decrescente',
+      'name-asc': 'Nome: A-Z',
+      'name-desc': 'Nome: Z-A'
+    };
+    return labels[sortBy] || 'Ordina per...';
+  }
 
   removeFromCart(item: CartItem) {
     this.cart = this.cart.filter(c => c.productId !== item.productId);
@@ -452,6 +589,44 @@ export class AppComponent implements OnInit {
     this.selectedProduct = p;
   }
 
+  openDetailFromCart(item: CartItem) {
+    // Close cart immediately for better UX
+    this.closeCart();
+    
+    // Load product in parallel - if we already have it in products list, use it
+    const existingProduct = this.products.find(p => p.id === item.productId);
+    
+    if (existingProduct) {
+      // Open detail immediately with cached product
+      setTimeout(() => {
+        this.selectedProduct = existingProduct;
+      }, 350);
+    } else {
+      // Load from server but still open quickly
+      setTimeout(() => {
+        // Show loading state with placeholder data
+        this.selectedProduct = {
+          id: item.productId,
+          name: item.name,
+          description: item.description,
+          price: item.price
+        } as Product;
+      }, 350);
+      
+      // Then load full details in background
+      this.http.get<Product>(`/api/products/${item.productId}`).subscribe({
+        next: (product) => {
+          if (this.selectedProduct?.id === item.productId) {
+            this.selectedProduct = product;
+          }
+        },
+        error: (err) => {
+          console.error(`Failed to load product ${item.productId}`, err);
+        }
+      });
+    }
+  }
+
   closeDetail() {
     this.selectedProduct = null;
   }
@@ -492,6 +667,11 @@ export class AppComponent implements OnInit {
     const id = p.id ?? p.Id ?? null;
     if (!id) return false;
     return !!this.imageFailed[id];
+  }
+
+  getItemImageSrc(item: CartItem): string | null {
+    if (!item.thumbnailCard || !item.thumbnailCardContentType) return null;
+    return `data:${item.thumbnailCardContentType};base64,${item.thumbnailCard}`;
   }
 }
 
