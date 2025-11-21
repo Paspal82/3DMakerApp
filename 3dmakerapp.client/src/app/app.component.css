@@ -19,6 +19,11 @@
     padding-top: 104px; /* 20px top offset + 64px nav height + 20px spacing */
 }
 
+/* Scroll offset for anchor links to prevent content hiding under fixed nav */
+*[id] {
+    scroll-margin-top: 104px; /* Same as :host padding-top */
+}
+
 /* Page title */
 h1#articoli {
     margin-top: 0;
@@ -1214,6 +1219,24 @@ body.theme-dark .modal-close-btn:hover {
     /* Mobile nav adjustments */
     .nav-container {
         padding: 0 1rem;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .nav-logo {
+        flex: 1;
+        margin-right: auto;
+    }
+
+    /* Cart icon and hamburger on the right */
+    .cart-icon-nav {
+        order: 2;
+        margin-left: 0;
+    }
+
+    .hamburger {
+        order: 3;
+        margin-left: 0;
     }
 
     .desktop-menu {

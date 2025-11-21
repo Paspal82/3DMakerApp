@@ -3,17 +3,35 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 
+interface ProductImage {
+  id?: string;
+  productId: string;
+  order: number;
+  isCover: boolean;
+  image?: string; // base64
+  imageContentType?: string;
+  thumbnailCard?: string; // base64 220x220
+  thumbnailCardContentType?: string;
+  thumbnailDetail?: string; // base64 512x512
+  thumbnailDetailContentType?: string;
+  thumbnailSlider?: string; // base64 120x120
+  thumbnailSliderContentType?: string;
+  createdAt?: string;
+}
+
 interface Product {
   id?: string;
   name: string;
   description: string;
   price: number;
-  image?: string | null; // base64 full image
+  image?: string | null; // base64 full image (legacy - keep for backward compatibility)
   imageContentType?: string | null;
-  thumbnailCard?: string | null; // base64 thumbnail for card
+  thumbnailCard?: string | null; // base64 thumbnail for card (legacy)
   thumbnailCardContentType?: string | null;
-  thumbnailDetail?: string | null; // base64 thumbnail for detail modal
+  thumbnailDetail?: string | null; // base64 thumbnail for detail modal (legacy)
   thumbnailDetailContentType?: string | null;
+  images?: ProductImage[]; // New: multiple images
+  coverImageId?: string; // New: reference to cover image
 }
 
 interface CartItem {
@@ -65,7 +83,14 @@ export class AppComponent implements OnInit, OnDestroy {
   public selectedPreviewUrl: string | null = null;
   public selectedFileError: string | null = null; // validation error for file
 
+  // Multi-image upload
+  public selectedFiles: File[] = [];
+  public selectedPreviews: { file: File; url: string; isCover: boolean }[] = [];
+  public uploadingImages = false;
+
   public selectedProduct: Product | null = null; // for detail modal
+  public selectedProductImages: ProductImage[] = []; // Images for selected product
+  public currentImageIndex = 0; // For slider in detail modal
 
   // theme settings
   public theme: 'light' | 'dark' = 'dark';
@@ -171,11 +196,17 @@ export class AppComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.products = res.items || [];
         this.total = res.total || 0;
+        
         // ensure default quantities exist
         for (const p of this.products) {
           if (p.id && !this.productQuantities[p.id]) this.productQuantities[p.id] = 1;
           // reset imageFailed for new items
           if (p.id && this.imageFailed[p.id]) delete this.imageFailed[p.id];
+          
+          // Load images for each product
+          if (p.id) {
+            this.loadProductImages(p.id);
+          }
         }
       },
       error: (err) => {
@@ -372,6 +403,14 @@ export class AppComponent implements OnInit, OnDestroy {
     return labels[sortBy] || 'Ordina per...';
   }
 
+  // Reset filters and reload all products
+  resetFilters() {
+    this.search = '';
+    this.nameFilter = '';
+    this.sortBy = '';
+    this.loadProducts(1);
+  }
+
   removeFromCart(item: CartItem) {
     this.cart = this.cart.filter(c => c.productId !== item.productId);
     this.saveCart();
@@ -489,104 +528,197 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // limit price input to at most 2 decimals and sanitize characters
-  onPriceInput() {
-    let s = this.newPrice ?? '';
-    if (!s) return;
+  // Multi-image file selection with preview
+  onMultiFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    this.selectedFileError = null;
 
-    // keep only digits and separators
-    s = s.replace(/[^0-9.,-]/g, '');
+    if (input.files && input.files.length > 0) {
+      const files = Array.from(input.files);
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+      const maxSize = 5 * 1024 * 1024; // 5 MB per image
 
-    // find last separator (dot or comma)
-    const lastDot = s.lastIndexOf('.');
-    const lastComma = s.lastIndexOf(',');
-    const sepIndex = Math.max(lastDot, lastComma);
+      for (const file of files) {
+        if (!allowedTypes.includes(file.type)) {
+          this.selectedFileError = `File ${file.name}: solo PNG o JPEG consentiti.`;
+          continue;
+        }
 
-    if (sepIndex === -1) {
-      // no decimal separator
-      // remove any other separators just in case
-      this.newPrice = s.replace(/[.,]/g, '');
-      return;
+        if (file.size > maxSize) {
+          this.selectedFileError = `File ${file.name}: massimo 5 MB.`;
+          continue;
+        }
+
+        // Generate preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const targetSize = 120;
+            const canvas = document.createElement('canvas');
+            canvas.width = targetSize;
+            canvas.height = targetSize;
+            const ctx = canvas.getContext('2d');
+            
+            if (ctx) {
+              const scale = Math.max(targetSize / img.width, targetSize / img.height);
+              const drawW = Math.round(img.width * scale);
+              const drawH = Math.round(img.height * scale);
+              const offsetX = Math.round((targetSize - drawW) / 2);
+              const offsetY = Math.round((targetSize - drawH) / 2);
+              
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+              
+              const dataUrl = canvas.toDataURL(file.type);
+              this.selectedPreviews.push({
+                file: file,
+                url: dataUrl,
+                isCover: this.selectedPreviews.length === 0 // First image is cover
+              });
+            }
+          };
+          img.src = e.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+      }
+
+      this.selectedFiles = files;
     }
-
-    const sep = s[sepIndex];
-    let intPart = s.slice(0, sepIndex).replace(/[.,]/g, '');
-    let frac = s.slice(sepIndex + 1).replace(/[.,]/g, '');
-
-    if (frac.length > 2) {
-      frac = frac.slice(0, 2);
-    }
-
-    this.newPrice = intPart + sep + frac;
   }
 
-  // create product using multipart/form-data
-  createProduct() {
-    this.lastError = null;
-    if (!this.newName) {
-      this.lastError = 'Il nome è obbligatorio.';
-      return;
-    }
+  // Toggle cover image selection
+  toggleCoverImage(index: number) {
+    this.selectedPreviews.forEach((preview, i) => {
+      preview.isCover = i === index;
+    });
+  }
 
-    if (this.selectedFileError) {
-      this.lastError = this.selectedFileError;
-      return;
+  // Remove preview image
+  removePreviewImage(index: number) {
+    this.selectedPreviews.splice(index, 1);
+    this.selectedFiles.splice(index, 1);
+    
+    // If removed was cover, set first as cover
+    if (this.selectedPreviews.length > 0 && !this.selectedPreviews.some(p => p.isCover)) {
+      this.selectedPreviews[0].isCover = true;
     }
+  }
 
-    // basic client-side price validation: accept both comma and dot
-    const priceVal = this.newPrice?.toString() ?? '';
-    const normalized = priceVal.replace(',', '.');
-    const parsed = Number(normalized);
-    if (priceVal && (isNaN(parsed) || !isFinite(parsed))) {
-      this.lastError = 'Formato prezzo non valido.';
-      return;
-    }
+  // Upload multiple images for a product
+  async uploadProductImages(productId: string) {
+    if (this.selectedFiles.length === 0) return;
 
+    this.uploadingImages = true;
     const formData = new FormData();
-    formData.append('Name', this.newName);
-    formData.append('Description', this.newDescription);
-    formData.append('Price', this.newPrice || '0');
-    if (this.selectedFile) {
-      formData.append('Image', this.selectedFile, this.selectedFile.name);
-    }
+    
+    this.selectedFiles.forEach((file) => {
+      formData.append('Images', file, file.name);
+    });
 
-    this.http.post<Product>('/api/products', formData).subscribe({
-      next: (created) => {
-        this.resetNewProduct();
-        // refresh list and names
-        this.loadNames();
-        this.loadProducts(1);
+    this.http.post<ProductImage[]>(`/api/products/${productId}/images`, formData).subscribe({
+      next: async (images) => {
+        console.log('Images uploaded:', images.length);
+        
+        // Set cover image if specified
+        const coverIndex = this.selectedPreviews.findIndex(p => p.isCover);
+        if (coverIndex >= 0 && images[coverIndex]?.id) {
+          await this.http.put(`/api/products/${productId}/images/${images[coverIndex].id}/set-cover`, {}).toPromise();
+        }
+        
+        this.uploadingImages = false;
+        this.resetImageUpload();
+        this.loadProducts(); // Refresh product list
       },
       error: (err) => {
-        console.error('Failed to create product', err);
-        this.lastError = 'Impossibile creare il prodotto.';
+        console.error('Failed to upload images', err);
+        this.lastError = 'Impossibile caricare le immagini.';
+        this.uploadingImages = false;
       }
     });
   }
 
-  resetNewProduct() {
-    this.newName = '';
-    this.newDescription = '';
-    this.newPrice = '';
-    this.selectedFile = null;
+  // Reset image upload state
+  resetImageUpload() {
+    this.selectedFiles = [];
+    this.selectedPreviews = [];
     this.selectedFileError = null;
-    if (this.selectedPreviewUrl) {
-      URL.revokeObjectURL(this.selectedPreviewUrl);
-      this.selectedPreviewUrl = null;
+  }
+
+  // Load images for a product
+  loadProductImages(productId: string) {
+    this.http.get<ProductImage[]>(`/api/products/${productId}/images`).subscribe({
+      next: (images) => {
+        if (this.selectedProduct?.id === productId) {
+          this.selectedProductImages = images;
+          this.currentImageIndex = 0;
+        }
+        
+        // Attach images to product in products list
+        const product = this.products.find(p => p.id === productId);
+        if (product) {
+          product.images = images;
+          product.coverImageId = images.find(img => img.isCover)?.id;
+        }
+      },
+      error: (err) => {
+        console.error('Failed to load product images', err);
+      }
+    });
+  }
+
+  // Set cover image
+  setCoverImage(productId: string, imageId: string) {
+    this.http.put(`/api/products/${productId}/images/${imageId}/set-cover`, {}).subscribe({
+      next: () => {
+        this.loadProductImages(productId);
+      },
+      error: (err) => {
+        console.error('Failed to set cover image', err);
+      }
+    });
+  }
+
+  // Delete product image
+  deleteProductImage(productId: string, imageId: string) {
+    this.http.delete(`/api/products/${productId}/images/${imageId}`).subscribe({
+      next: () => {
+        this.loadProductImages(productId);
+      },
+      error: (err) => {
+        console.error('Failed to delete image', err);
+      }
+    });
+  }
+
+  // Slider navigation
+  nextImage() {
+    if (this.selectedProductImages.length > 0) {
+      this.currentImageIndex = (this.currentImageIndex + 1) % this.selectedProductImages.length;
     }
   }
 
-  // Reset filters and reload all products
-  resetFilters() {
-    this.search = '';
-    this.nameFilter = '';
-    this.sortBy = '';
-    this.loadProducts(1);
+  previousImage() {
+    if (this.selectedProductImages.length > 0) {
+      this.currentImageIndex = (this.currentImageIndex - 1 + this.selectedProductImages.length) % this.selectedProductImages.length;
+    }
+  }
+
+  goToImage(index: number) {
+    this.currentImageIndex = index;
+  }
+
+  getCurrentImage(): ProductImage | null {
+    return this.selectedProductImages[this.currentImageIndex] || null;
   }
 
   // Detail modal
   openDetail(p: Product) {
     this.selectedProduct = p;
+    this.currentImageIndex = 0;
+    if (p.id) {
+      this.loadProductImages(p.id);
+    }
   }
 
   openDetailFromCart(item: CartItem) {
@@ -600,6 +732,10 @@ export class AppComponent implements OnInit, OnDestroy {
       // Open detail immediately with cached product
       setTimeout(() => {
         this.selectedProduct = existingProduct;
+        this.currentImageIndex = 0;
+        if (existingProduct.id) {
+          this.loadProductImages(existingProduct.id);
+        }
       }, 350);
     } else {
       // Load from server but still open quickly
@@ -611,6 +747,7 @@ export class AppComponent implements OnInit, OnDestroy {
           description: item.description,
           price: item.price
         } as Product;
+        this.currentImageIndex = 0;
       }, 350);
       
       // Then load full details in background
@@ -618,6 +755,7 @@ export class AppComponent implements OnInit, OnDestroy {
         next: (product) => {
           if (this.selectedProduct?.id === item.productId) {
             this.selectedProduct = product;
+            this.loadProductImages(item.productId);
           }
         },
         error: (err) => {
@@ -629,23 +767,23 @@ export class AppComponent implements OnInit, OnDestroy {
 
   closeDetail() {
     this.selectedProduct = null;
+    this.selectedProductImages = [];
+    this.currentImageIndex = 0;
   }
 
-  openFullImage(p: Product | null) {
-    if (!p) return;
-    if (p.image && p.imageContentType) {
-      const url = 'data:' + p.imageContentType + ';base64,' + p.image;
-      const win = window.open();
-      if (win) {
-        win.document.write('<title>' + (p.name || 'Image') + '</title>');
-        win.document.write('<img src="' + url + '" style="max-width:100%;height:auto;display:block;margin:0 auto;"/>');
-      }
-    }
-  }
-
-  // helper to get card image/data url (handles different JSON property casings)
+  // helper to get card image/data url (handles different JSON property casings and new images array)
   getCardSrc(p: any): string | null {
     if (!p) return null;
+    
+    // Try new images array first (cover image)
+    if (p.images && Array.isArray(p.images) && p.images.length > 0) {
+      const coverImage = p.images.find((img: ProductImage) => img.isCover) || p.images[0];
+      if (coverImage?.thumbnailCard && coverImage?.thumbnailCardContentType) {
+        return `data:${coverImage.thumbnailCardContentType};base64,${coverImage.thumbnailCard}`;
+      }
+    }
+    
+    // Fallback to legacy single image
     const data = p.thumbnailCard ?? p.ThumbnailCard ?? p.image ?? p.Image ?? null;
     const type = p.thumbnailCardContentType ?? p.ThumbnailCardContentType ?? p.imageContentType ?? p.ImageContentType ?? null;
     if (!data || !type) return null;
@@ -655,10 +793,39 @@ export class AppComponent implements OnInit, OnDestroy {
   // helper for detail image src
   getDetailSrc(p: any): string | null {
     if (!p) return null;
+    
+    // Try new images array first (current slider image)
+    const currentImage = this.getCurrentImage();
+    if (currentImage?.thumbnailDetail && currentImage?.thumbnailDetailContentType) {
+      return `data:${currentImage.thumbnailDetailContentType};base64,${currentImage.thumbnailDetail}`;
+    }
+    
+    // Try images array (cover image)
+    if (p.images && Array.isArray(p.images) && p.images.length > 0) {
+      const coverImage = p.images.find((img: ProductImage) => img.isCover) || p.images[0];
+      if (coverImage?.thumbnailDetail && coverImage?.thumbnailDetailContentType) {
+        return `data:${coverImage.thumbnailDetailContentType};base64,${coverImage.thumbnailDetail}`;
+      }
+    }
+    
+    // Fallback to legacy single image
     const data = p.thumbnailDetail ?? p.ThumbnailDetail ?? p.image ?? p.Image ?? null;
     const type = p.thumbnailDetailContentType ?? p.ThumbnailDetailContentType ?? p.imageContentType ?? p.ImageContentType ?? null;
     if (!data || !type) return null;
     return `data:${type};base64,${data}`;
+  }
+
+  // Get slider thumbnail src
+  getSliderThumbSrc(image: ProductImage): string | null {
+    if (!image) return null;
+    if (image.thumbnailSlider && image.thumbnailSliderContentType) {
+      return `data:${image.thumbnailSliderContentType};base64,${image.thumbnailSlider}`;
+    }
+    // Fallback to card thumbnail
+    if (image.thumbnailCard && image.thumbnailCardContentType) {
+      return `data:${image.thumbnailCardContentType};base64,${image.thumbnailCard}`;
+    }
+    return null;
   }
 
   // helper to check if image failed for product (avoids indexing with undefined)

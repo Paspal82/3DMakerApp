@@ -175,7 +175,7 @@
         <button class="modal-close" (click)="closeDetail()" aria-label="Chiudi">✕</button>
         
         <div *ngIf="getDetailSrc(selectedProduct) && !isImageFailed(selectedProduct)" class="detail-image">
-          <img (error)="onImageError(selectedProduct)" [src]="getDetailSrc(selectedProduct)" alt="{{selectedProduct?.name}}" />
+          <img (error)="onImageError(selectedProduct)" [src]="getDetailSrc(selectedProduct)" alt="{{selectedProduct.name}}" />
         </div>
         <div *ngIf="!getDetailSrc(selectedProduct) || isImageFailed(selectedProduct)" class="detail-image placeholder">
           <svg viewBox="0 0 24 24" width="120" height="120" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
@@ -185,9 +185,9 @@
         </div>
       </div>
       
-      <h2 class="detail-title">{{selectedProduct?.name}}</h2>
-      <p class="detail-description">{{selectedProduct?.description}}</p>
-      <p class="detail-price">{{ selectedProduct?.price | currency:'EUR':'symbol':'1.2-2' }}</p>
+      <h2 class="detail-title">{{selectedProduct.name}}</h2>
+      <p class="detail-description">{{selectedProduct.description}}</p>
+      <p class="detail-price">{{ selectedProduct.price | currency:'EUR':'symbol':'1.2-2' }}</p>
     </div>
   </div>
 
