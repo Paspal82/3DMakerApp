@@ -1,46 +1,314 @@
 <main>
-  <h1>Prodotti</h1>
+  <!-- Top Navigation Menu -->
+  <nav class="top-nav">
+    <div class="nav-container">
+      <h1 class="nav-logo">3D Maker</h1>
+      
+      <!-- Desktop Menu -->
+      <ul class="nav-menu desktop-menu">
+        <li><a href="#home" class="nav-link">Home</a></li>
+        <li><a href="#articoli" class="nav-link">Articoli</a></li>
+        <li class="nav-dropdown">
+          <span class="nav-link">Impostazioni</span>
+          <div class="dropdown-content">
+            <button class="dropdown-item" (click)="toggleTheme()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" *ngIf="theme === 'dark'">
+                <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="2"/>
+                <line x1="12" y1="1" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="12" y1="21" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="1" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="21" y1="12" x2="23" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" *ngIf="theme === 'light'">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span *ngIf="theme === 'dark'">Tema Chiaro</span>
+              <span *ngIf="theme === 'light'">Tema Scuro</span>
+            </button>
+          </div>
+        </li>
+      </ul>
 
-  <section>
-    <h2>Nuovo prodotto</h2>
-    <form (ngSubmit)="createProduct()">
-      <div>
-        <label>Nome</label>
-        <input [(ngModel)]="newProduct.name" name="name" required />
-      </div>
-      <div>
-        <label>Descrizione</label>
-        <input [(ngModel)]="newProduct.description" name="description" />
-      </div>
-      <div>
-        <label>Prezzo</label>
-        <input type="number" [(ngModel)]="newProduct.price" name="price" />
-      </div>
-      <button type="submit">Crea</button>
-    </form>
+      <!-- Cart Icon -->
+      <button class="cart-icon-nav" (click)="openCart()" aria-label="Apri carrello">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M3 6h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M16 10a4 4 0 0 1-8 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="cart-count" *ngIf="cartCount > 0">{{ cartCount }}</span>
+      </button>
+
+      <!-- Mobile Hamburger -->
+      <button class="hamburger" (click)="toggleMenu()" [class.active]="menuOpen" aria-label="Menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+
+    <!-- Mobile Menu -->
+    <ul class="nav-menu mobile-menu" [class.open]="menuOpen">
+      <li><a href="#home" class="nav-link" (click)="closeMenu()">Home</a></li>
+      <li><a href="#articoli" class="nav-link" (click)="closeMenu()">Articoli</a></li>
+      <li>
+        <button class="nav-link mobile-theme-toggle" (click)="toggleTheme()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" *ngIf="theme === 'dark'">
+            <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="2"/>
+            <line x1="12" y1="1" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="12" y1="21" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="1" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="21" y1="12" x2="23" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" *ngIf="theme === 'light'">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span *ngIf="theme === 'dark'">Tema Chiaro</span>
+          <span *ngIf="theme === 'light'">Tema Scuro</span>
+        </button>
+      </li>
+    </ul>
+  </nav>
+
+  <h1 id="articoli">ARTICOLI</h1>
+
+  <!-- success popup centered -->
+  <div *ngIf="lastSuccess" class="success-popup" role="status" aria-live="polite">
+    <div class="success-content">{{ lastSuccess }}</div>
+  </div>
+
+  <section class="controls">
+    <input type="text" placeholder="Cerca articolo..." [(ngModel)]="search" (input)="onSearchInput(search)" />
+
+    <!-- Desktop selects -->
+    <select class="desktop-select" [(ngModel)]="nameFilter" (change)="onFilterChange()">
+      <option value="">Lista articoli</option>
+      <option *ngFor="let n of names" [value]="n">{{ n }}</option>
+    </select>
+
+    <select class="desktop-select" [(ngModel)]="sortBy" (change)="onSortChange()">
+      <option value="" disabled>Ordina per...</option>
+      <option value="newest">Ultimi inseriti</option>
+      <option value="price-asc">Prezzo: crescente</option>
+      <option value="price-desc">Prezzo: decrescente</option>
+      <option value="name-asc">Nome: A-Z</option>
+      <option value="name-desc">Nome: Z-A</option>
+    </select>
+
+    <!-- Mobile buttons that open modals -->
+    <button class="mobile-select-btn" (click)="openFilterModal()">
+      {{ nameFilter || 'Lista articoli' }}
+    </button>
+
+    <button class="mobile-select-btn" (click)="openSortModal()">
+      {{ sortBy ? getSortLabel(sortBy) : 'Ordina per...' }}
+    </button>
+
+    <button (click)="resetFilters()">Reset filtri</button>
   </section>
 
-  <section>
-    <h2>Elenco prodotti</h2>
-    <table *ngIf="products && products.length; else empty">
-      <thead>
-        <tr>
-          <th>Nome</th>
-          <th>Descrizione</th>
-          <th>Prezzo</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let p of products">
-          <td>{{ p.name }}</td>
-          <td>{{ p.description }}</td>
-          <td>{{ p.price | number: '1.2-2' }}</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <ng-template #empty>
-      <p>Nessun prodotto disponibile.</p>
-    </ng-template>
+  <section *ngIf="lastError; else productList">
+    <p>{{ lastError }}</p>
   </section>
+
+  <ng-template #productList>
+    <div class="cards">
+      <div class="card" *ngFor="let p of products" (click)="openDetail(p)">
+        <div class="thumb" *ngIf="getCardSrc(p) && !isImageFailed(p); else placeholder">
+          <img (error)="onImageError(p)" [src]="getCardSrc(p)" alt="{{p.name}}" />
+        </div>
+        <ng-template #placeholder>
+          <div class="thumb placeholder">
+            <!-- classic camera with slash 'image not found' icon -->
+            <svg viewBox="0 0 24 24" width="96" height="96" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21 6h-3.2l-1.6-2.4A1 1 0 0 0 15.6 3H8.4a1 1 0 0 0-.6.2L6.2 5H3a1 1 0 0 0-1 1v11.8c0 .6.4 1 .9 1H20a1 1 0 0 0 1-.9V7a1 1 0 0 0-1-1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 3l18 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </ng-template>
+        
+        <div class="card-body">
+          <h3 class="card-title">{{ p.name }}</h3>
+          <p class="desc truncated">{{ p.description }}</p>
+          
+          <div class="card-footer">
+            <p class="price">{{ p.price | currency:'EUR':'symbol':'1.2-2' }}</p>
+            
+            <button 
+              class="icon-btn cart-btn" 
+              [class.loading]="getButtonState(p).loading"
+              (click)="addToCart(p, $event)"
+              aria-label="Aggiungi al carrello" 
+              title="Aggiungi al carrello">
+              
+              <svg *ngIf="!getButtonState(p).loading" viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 6h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M16 10a4 4 0 0 1-8 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pagination" *ngIf="pageCount > 1">
+      <button (click)="goToPage(page-1)" [disabled]="page===1">Prev</button>
+      <span>Pagina {{page}} di {{pageCount}}</span>
+      <button (click)="goToPage(page+1)" [disabled]="page===pageCount">Next</button>
+    </div>
+
+    <p *ngIf="products.length === 0">Nessun prodotto disponibile.</p>
+  </ng-template>
+
+  <div class="modal" *ngIf="selectedProduct">
+    <div class="modal-content">
+      <div class="detail-image-wrapper">
+        <button class="modal-close" (click)="closeDetail()" aria-label="Chiudi">✕</button>
+        
+        <div *ngIf="getDetailSrc(selectedProduct) && !isImageFailed(selectedProduct)" class="detail-image">
+          <img (error)="onImageError(selectedProduct)" [src]="getDetailSrc(selectedProduct)" alt="{{selectedProduct.name}}" />
+        </div>
+        <div *ngIf="!getDetailSrc(selectedProduct) || isImageFailed(selectedProduct)" class="detail-image placeholder">
+          <svg viewBox="0 0 24 24" width="120" height="120" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21 6h-3.2l-1.6-2.4A1 1 0 0 0 15.6 3H8.4a1 1 0 0 0-.6.2L6.2 5H3a1 1 0 0 0-1 1v11.8c0 .6.4 1 .9 1H20a1 1 0 0 0 1-.9V7a1 1 0 0 0-1-1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 3l18 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      
+      <h2 class="detail-title">{{selectedProduct.name}}</h2>
+      <p class="detail-description">{{selectedProduct.description}}</p>
+      <p class="detail-price">{{ selectedProduct.price | currency:'EUR':'symbol':'1.2-2' }}</p>
+    </div>
+  </div>
+
+  <div class="cart-modal" *ngIf="cartOpen" [class.closing]="cartClosing">
+    <div class="cart-panel" [class.closing]="cartClosing">
+      <div class="cart-header">
+        <h3>Carrello</h3>
+        <button class="cart-close-btn" (click)="closeCart()" aria-label="Chiudi carrello">✕</button>
+      </div>
+      
+      <div class="cart-items-list">
+        <div *ngFor="let item of cart" class="cart-item-card" (click)="openDetailFromCart(item)">
+          <div class="cart-item-info">
+            <h4 class="item-name">{{ item.name }}</h4>
+            <p class="item-description">{{ item.description }}</p>
+            <div class="item-controls">
+              <div class="qty-controls">
+                <button class="qty-btn" (click)="changeCartQty(item, item.quantity - 1); $event.stopPropagation()" aria-label="Diminuisci quantità">−</button>
+                <span class="qty-value">{{ item.quantity }}</span>
+                <button class="qty-btn" (click)="changeCartQty(item, item.quantity + 1); $event.stopPropagation()" aria-label="Aumenta quantità">+</button>
+              </div>
+              <button class="delete-btn" (click)="removeFromCart(item); $event.stopPropagation()" aria-label="Rimuovi dal carrello">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="cart-item-image">
+            <img *ngIf="item.thumbnailCard && item.thumbnailCardContentType" 
+                 [src]="'data:' + item.thumbnailCardContentType + ';base64,' + item.thumbnailCard" 
+                 [alt]="item.name" />
+            <div *ngIf="!item.thumbnailCard" class="item-placeholder">
+              <svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                <path d="M21 6h-3.2l-1.6-2.4A1 1 0 0 0 15.6 3H8.4a1 1 0 0 0-.6.2L6.2 5H3a1 1 0 0 0-1 1v11.8c0 .6.4 1 .9 1H20a1 1 0 0 0 1-.9V7a1 1 0 0 0-1-1z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M3 3l18 18" stroke="currentColor" stroke-width="1.6"/>
+              </svg>
+            </div>
+            <p class="item-price">{{ item.price | currency:'EUR':'symbol':'1.2-2' }}</p>
+          </div>
+        </div>
+        
+        <div *ngIf="cart.length === 0" class="cart-empty">
+          <svg viewBox="0 0 24 24" width="64" height="64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 6h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M16 10a4 4 0 0 1-8 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p>Il carrello è vuoto</p>
+        </div>
+      </div>
+
+      <div class="cart-footer">
+        <div class="cart-summary">
+          <span class="summary-label">Totale</span>
+          <span class="summary-value">{{ cartTotal | currency:'EUR':'symbol':'1.2-2' }}</span>
+        </div>
+        
+        <div class="cart-actions">
+          <button class="btn-checkout" *ngIf="cart.length > 0">Checkout</button>
+          <button class="btn-clear" (click)="clearCart()" *ngIf="cart.length > 0">Svuota Carrello</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clear Cart Confirmation Modal -->
+  <div class="confirmation-modal" *ngIf="showClearCartConfirm">
+    <div class="confirmation-content">
+      <h3>Conferma</h3>
+      <p>Sei sicuro di voler svuotare il carrello?</p>
+      <div class="confirmation-actions">
+        <button class="btn-cancel" (click)="cancelClearCart()">Annulla</button>
+        <button class="btn-confirm" (click)="confirmClearCart()">Conferma</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Modal (Mobile) -->
+  <div class="select-modal" *ngIf="showFilterModal" (click)="closeFilterModal()">
+    <div class="select-modal-content" (click)="$event.stopPropagation()">
+      <div class="select-modal-header">
+        <h3>Filtra per Nome</h3>
+        <button class="modal-close-btn" (click)="closeFilterModal()">✕</button>
+      </div>
+      <div class="select-modal-list">
+        <button class="select-option" [class.selected]="nameFilter === ''" (click)="selectFilter('')">
+          Lista articoli
+        </button>
+        <button class="select-option" *ngFor="let n of names" [class.selected]="nameFilter === n" (click)="selectFilter(n)">
+          {{ n }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sort Modal (Mobile) -->
+  <div class="select-modal" *ngIf="showSortModal" (click)="closeSortModal()">
+    <div class="select-modal-content" (click)="$event.stopPropagation()">
+      <div class="select-modal-header">
+        <h3>Ordina per</h3>
+        <button class="modal-close-btn" (click)="closeSortModal()">✕</button>
+      </div>
+      <div class="select-modal-list">
+        <button class="select-option" [class.selected]="sortBy === 'newest'" (click)="selectSort('newest')">
+          Ultimi inseriti
+        </button>
+        <button class="select-option" [class.selected]="sortBy === 'price-asc'" (click)="selectSort('price-asc')">
+          Prezzo: crescente
+        </button>
+        <button class="select-option" [class.selected]="sortBy === 'price-desc'" (click)="selectSort('price-desc')">
+          Prezzo: decrescente
+        </button>
+        <button class="select-option" [class.selected]="sortBy === 'name-asc'" (click)="selectSort('name-asc')">
+          Nome: A-Z
+        </button>
+        <button class="select-option" [class.selected]="sortBy === 'name-desc'" (click)="selectSort('name-desc')">
+          Nome: Z-A
+        </button>
+      </div>
+    </div>
+  </div>
 </main>

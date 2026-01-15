@@ -1,1 +1,143 @@
 /* You can add global styles to this file, and also import other style files */
+
+/* Global theme variables and defaults */
+:root {
+  /* light theme defaults */
+  --bg-color: #ffffff;
+  --text-color: #0b1220;
+  --muted-color: #475569;
+  --accent-color: #1f6feb;
+  --card-bg: #f8fafc; /* slightly lighter */
+  --card-border: rgba(11,17,32,0.06);
+  --card-shadow: 0 2px 8px rgba(2,6,23,0.06);
+  --price-color: #1a73e8;
+  --file-error-color: #b91c1c;
+  --modal-bg: linear-gradient(180deg,#ffffff,#f8fafc);
+  --modal-text: #0b1220;
+  --card-height: 320px;
+  --hover-lift: translateY(-6px);
+}
+
+body.theme-dark {
+  --bg-color: #0b0f12;
+  --text-color: #e6eef3;
+  --muted-color: #cbd5e1;
+  --accent-color: #1f6feb;
+  --card-bg: linear-gradient(180deg, #111827, #0f1720);
+  --card-border: rgba(255,255,255,0.04);
+  --card-shadow: 0 1px 8px rgba(0,0,0,0.6);
+  --price-color: #7dd3fc;
+  --file-error-color: #fda4af;
+  --modal-bg: linear-gradient(180deg,#0b1220,#0f1720);
+  --modal-text: #e6eef3;
+  --card-height: 320px;
+  --hover-lift: translateY(-8px);
+}
+
+body.theme-light {
+  /* explicit light theme (same as root defaults) */
+  --bg-color: #ffffff;
+  --text-color: #0b1220;
+  --muted-color: #475569;
+  --accent-color: #1f6feb;
+  --card-bg: #f8fafc;
+  --card-border: rgba(11,17,32,0.06);
+  --card-shadow: 0 2px 8px rgba(2,6,23,0.06);
+  --price-color: #1a73e8;
+  --file-error-color: #b91c1c;
+  --modal-bg: linear-gradient(180deg,#ffffff,#f8fafc);
+  --modal-text: #0b1220;
+  --card-height: 320px;
+  --hover-lift: translateY(-6px);
+}
+
+/* Apply base styles */
+html, body {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+}
+
+/* Utility to apply accent color */
+.btn-accent {
+  background: var(--accent-color);
+  color: white;
+  border: none;
+  padding: 0.45rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Ensure app root expands full height */
+app-root, main {
+  display: block;
+  min-height: 100vh;
+}
+
+/* Global form control styles */
+input[type="text"], input[type="number"], input[type="search"], input[type="email"], input[type="password"], textarea, select {
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  color: var(--text-color);
+  transition: box-shadow 0.15s ease, border-color 0.12s ease, transform 0.12s ease;
+  font: inherit;
+  width: 100%;
+  max-width: 100%;
+  appearance: none;
+}
+
+textarea { min-height: 100px; resize: vertical; }
+
+input::placeholder, textarea::placeholder { color: var(--muted-color); opacity: 0.9; }
+
+select { padding-right: 1.2rem; }
+
+/* Buttons */
+button, input[type="button"], input[type="submit"], .btn-accent {
+  font: inherit;
+  padding: 0.45rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: var(--accent-color);
+  color: white;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+
+button:active { transform: translateY(1px); }
+button[disabled], input[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+
+
+/* Focus styles for accessibility */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(31,111,235,0.14);
+  border-color: rgba(31,111,235,0.6);
+}
+
+/* File inputs */
+input[type="file"] {
+  background: transparent;
+  color: var(--text-color);
+}
+
+/* Inputs inside .controls should be compact */
+.controls input[type="text"], .controls select { width: 240px; }
+
+/* Helper utility */
+.form-row { display:flex; gap:0.5rem; align-items:center; }
+
+/* Small responsive tweaks */
+@media (max-width: 600px) {
+  .controls input[type="text"], .controls select { width: 140px; }
+}

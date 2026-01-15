@@ -21,6 +21,9 @@ builder.Services.AddCors(options =>
 // Register ProductService
 builder.Services.AddSingleton<_3DMakerApp.Server.Services.ProductService>();
 
+// Register ProductImageService
+builder.Services.AddSingleton<_3DMakerApp.Server.Services.ProductImageService>();
+
 var app = builder.Build();
 
 // Do not map static assets or SPA fallback so root is served by controllers.
